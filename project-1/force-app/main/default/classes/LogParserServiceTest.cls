@@ -27,7 +27,7 @@ private class LogParserServiceTest {
 
         Test.startTest();
         CloudAIService.AIAnalysisResponse resp = CloudAIService.generateFix(req);
-        CloudAIService.AIAnalysisResponse respWithConfig = CloudAIService.generateFix(req, 'mock_key', 'gemini-3.8-flash');
+        CloudAIService.AIAnalysisResponse respWithConfig = CloudAIService.generateFix(req, 'mock_key', 'gemini-2.5-flash');
         Test.stopTest();
 
         System.assertNotEquals(null, resp, 'Response should not be null');
@@ -59,10 +59,10 @@ private class LogParserServiceTest {
             'for(Account a : accs) { Contact c = [SELECT Id FROM Contact]; }',
             new List<String>{'SOQL in loop'},
             'test_key',
-            'gemini-3.8-flash'
+            'gemini-2.5-flash'
         );
 
-        String testConn = LogAnalyzerController.testGeminiConnection('mock_key', 'gemini-3.8-flash');
+        String testConn = LogAnalyzerController.testGeminiConnection('mock_key', 'gemini-2.5-flash');
         LogAnalyzerController.MultiLogResult multi = LogAnalyzerController.analyzeUserRecentLogs(null, 5);
 
         Test.stopTest();

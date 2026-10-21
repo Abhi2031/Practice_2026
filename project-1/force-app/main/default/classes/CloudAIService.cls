@@ -25,7 +25,7 @@ public with sharing class CloudAIService {
      * Backward-compatible overload without API key
      */
     public static AIAnalysisResponse generateFix(AIAnalysisRequest req) {
-        return generateFix(req, null, 'gemini-3.8-flash');
+        return generateFix(req, null, 'gemini-2.5-flash');
     }
 
     /**
@@ -34,7 +34,7 @@ public with sharing class CloudAIService {
     public static AIAnalysisResponse generateFix(AIAnalysisRequest req, String apiKey, String modelName) {
         AIAnalysisResponse resp = new AIAnalysisResponse();
         if (String.isBlank(modelName)) {
-            modelName = 'gemini-3.8-flash';
+            modelName = 'gemini-2.5-flash';
         }
         resp.modelUsed = modelName;
 
@@ -45,7 +45,7 @@ public with sharing class CloudAIService {
             try {
                 HttpRequest httpReq = new HttpRequest();
                 String endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-                    modelName + ':generateContent?key=' + EncodingUtil.urlEncode(apiKey.trim(), 'UTF-8');
+                    EncodingUtil.urlEncode(modelName.trim(), 'UTF-8') + ':generateContent?key=' + EncodingUtil.urlEncode(apiKey.trim(), 'UTF-8');
                 httpReq.setEndpoint(endpoint);
                 httpReq.setMethod('POST');
                 httpReq.setHeader('Content-Type', 'application/json');
@@ -69,6 +69,10 @@ public with sharing class CloudAIService {
                     resp = parseAIResponse(httpRes.getBody(), req);
                     resp.modelUsed = modelName + ' (Live)';
                     return resp;
+                } else if (httpRes.getStatusCode() == 503) {
+                    resp = fallbackRuleBasedFix(req);
+                    resp.modelUsed = 'Rule-Based Engine (Gemini 503 High Demand - Switch model in Settings)';
+                    return resp;
                 } else {
                     resp = fallbackRuleBasedFix(req);
                     resp.modelUsed = 'Rule-Based Engine (Gemini HTTP ' + httpRes.getStatusCode() + ')';
@@ -76,7 +80,7 @@ public with sharing class CloudAIService {
                 }
             } catch (Exception ex) {
                 resp = fallbackRuleBasedFix(req);
-                resp.modelUsed = 'Rule-Based Engine (Callout Fallback)';
+                resp.modelUsed = 'Rule-Based Engine (Callout Fallback: ' + ex.getMessage() + ')';
                 return resp;
             }
         }
@@ -84,7 +88,7 @@ public with sharing class CloudAIService {
         // 2. Try Named Credential if configured in org
         try {
             HttpRequest httpReq = new HttpRequest();
-            httpReq.setEndpoint('callout:AI_Service_Credential/v1beta/models/' + modelName + ':generateContent');
+            httpReq.setEndpoint('callout:AI_Service_Credential/v1beta/models/' + EncodingUtil.urlEncode(modelName.trim(), 'UTF-8') + ':generateContent');
             httpReq.setMethod('POST');
             httpReq.setHeader('Content-Type', 'application/json');
             httpReq.setTimeout(45000);
@@ -126,12 +130,13 @@ public with sharing class CloudAIService {
             return 'API Key is required to test connection.';
         }
         if (String.isBlank(modelName)) {
-            modelName = 'gemini-3.8-flash';
+            modelName = 'gemini-2.5-flash';
         }
         try {
             HttpRequest req = new HttpRequest();
-            req.setEndpoint('https://generativelanguage.googleapis.com/v1beta/models/' +
-                modelName + ':generateContent?key=' + EncodingUtil.urlEncode(apiKey.trim(), 'UTF-8'));
+            String endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+                EncodingUtil.urlEncode(modelName.trim(), 'UTF-8') + ':generateContent?key=' + EncodingUtil.urlEncode(apiKey.trim(), 'UTF-8');
+            req.setEndpoint(endpoint);
             req.setMethod('POST');
             req.setHeader('Content-Type', 'application/json');
             req.setTimeout(15000);
@@ -151,6 +156,8 @@ public with sharing class CloudAIService {
             HttpResponse res = h.send(req);
             if (res.getStatusCode() == 200) {
                 return 'SUCCESS';
+            } else if (res.getStatusCode() == 503) {
+                return 'HTTP 503 (High Demand / Overloaded): Google servers are currently experiencing high traffic for "' + modelName + '". Please select another model (e.g., Gemini 2.5 Flash, 2.0 Flash, or 1.5 Flash) from the dropdown.';
             } else {
                 return 'HTTP ' + res.getStatusCode() + ': ' + res.getBody();
             }

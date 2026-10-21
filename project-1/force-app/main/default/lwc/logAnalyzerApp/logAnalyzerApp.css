@@ -1704,7 +1704,7 @@
     box-shadow: var(--md-shadow-lg);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .modal-header {
@@ -1759,6 +1759,21 @@
     gap: 0.4rem;
 }
 
+.form-label-sub {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--md-text-secondary);
+    margin-top: 0.5rem;
+    display: block;
+}
+
+.custom-model-wrapper {
+    margin-top: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
 .input-password-row {
     display: flex;
     gap: 0.5rem;
@@ -1786,20 +1801,24 @@
 }
 
 .test-status {
-    padding: 0.5rem 0.75rem;
-    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
     font-size: 0.8125rem;
-    font-weight: 600;
+    font-weight: 500;
+    line-height: 1.45;
+    word-break: break-word;
 }
 
 .success-text {
     background: #dcfce7;
     color: #15803d;
+    border: 1px solid #86efac;
 }
 
 .error-text {
     background: #fee2e2;
     color: #b91c1c;
+    border: 1px solid #fca5a5;
 }
 
 .modal-footer {
@@ -1809,6 +1828,8 @@
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--md-border);
     background: #f8fafc;
+    border-bottom-left-radius: 12px;
+    border-bottom-right-radius: 12px;
 }
 
 /* ===================================================

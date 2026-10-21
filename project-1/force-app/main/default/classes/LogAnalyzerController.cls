@@ -403,7 +403,7 @@ public with sharing class LogAnalyzerController {
         String surroundingCode,
         List<String> warnings
     ) {
-        return requestAIFixWithConfig(exceptionType, errorMessage, className, lineNumber, surroundingCode, warnings, null, 'gemini-3.8-flash');
+        return requestAIFixWithConfig(exceptionType, errorMessage, className, lineNumber, surroundingCode, warnings, null, 'gemini-2.5-flash');
     }
 
     /**

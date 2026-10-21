@@ -41,7 +41,9 @@ export default class LogAnalyzerApp extends LightningElement {
     // Gemini Modal State
     @track showGeminiModal = false;
     @track geminiApiKey = '';
-    @track geminiModel = 'gemini-3.8-flash';
+    @track geminiModel = 'gemini-2.5-flash';
+    @track customModelName = '';
+    @track isCustomModel = false;
     @track geminiTestStatus = '';
     @track isGeminiTestSuccess = false;
     @track showPassword = false;
@@ -54,7 +56,20 @@ export default class LogAnalyzerApp extends LightningElement {
             }
             const savedModel = localStorage.getItem('apex_ai_gemini_model');
             if (savedModel) {
-                this.geminiModel = savedModel;
+                // If previously saved model was gemini-3.8-flash (which returned 503 high demand), default to 2.5-flash
+                if (savedModel === 'gemini-3.8-flash') {
+                    this.geminiModel = 'gemini-2.5-flash';
+                } else {
+                    const standardValues = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-3.8-flash'];
+                    if (standardValues.includes(savedModel)) {
+                        this.geminiModel = savedModel;
+                        this.isCustomModel = false;
+                    } else {
+                        this.geminiModel = 'custom';
+                        this.customModelName = savedModel;
+                        this.isCustomModel = true;
+                    }
+                }
             }
         } catch (e) {
             console.warn('localStorage access unavailable:', e);
@@ -322,7 +337,7 @@ export default class LogAnalyzerApp extends LightningElement {
             surroundingCode: err.logLine || '',
             warnings: warnings,
             apiKey: this.geminiApiKey || null,
-            modelName: this.geminiModel || 'gemini-3.8-flash'
+            modelName: this.effectiveModelName
         })
             .then(fix => {
                 this.aiFix = fix;
@@ -380,7 +395,22 @@ export default class LogAnalyzerApp extends LightningElement {
     }
 
     handleModelChange(event) {
-        this.geminiModel = event.detail.value;
+        const selectedVal = event.detail.value;
+        this.geminiModel = selectedVal;
+        this.isCustomModel = (selectedVal === 'custom');
+        this.geminiTestStatus = '';
+    }
+
+    handleCustomModelInput(event) {
+        this.customModelName = (event.target.value || '').trim();
+        this.geminiTestStatus = '';
+    }
+
+    get effectiveModelName() {
+        if (this.geminiModel === 'custom') {
+            return this.customModelName ? this.customModelName.trim() : 'gemini-2.5-flash';
+        }
+        return this.geminiModel || 'gemini-2.5-flash';
     }
 
     handleTogglePassword() {
@@ -397,9 +427,13 @@ export default class LogAnalyzerApp extends LightningElement {
 
     get geminiModelOptions() {
         return [
-            { label: 'Gemini 3.8 Flash (Default / High Speed)', value: 'gemini-3.8-flash' },
-            { label: 'Gemini 1.5 Flash (Fast & Lightweight)', value: 'gemini-1.5-flash' },
-            { label: 'Gemini 1.5 Pro (Deep Reasoning)', value: 'gemini-1.5-pro' }
+            { label: 'Gemini 2.5 Flash (Recommended - Fast & Stable)', value: 'gemini-2.5-flash' },
+            { label: 'Gemini 2.0 Flash (Next-Gen High Speed)', value: 'gemini-2.0-flash' },
+            { label: 'Gemini 1.5 Flash (Ultra Reliable & Lightweight)', value: 'gemini-1.5-flash' },
+            { label: 'Gemini 2.5 Pro (Deep Architectural Reasoning)', value: 'gemini-2.5-pro' },
+            { label: 'Gemini 1.5 Pro (Standard Pro)', value: 'gemini-1.5-pro' },
+            { label: 'Gemini 3.8 Flash (Experimental / High Demand)', value: 'gemini-3.8-flash' },
+            { label: 'Custom Model (Enter custom identifier)...', value: 'custom' }
         ];
     }
 
@@ -410,9 +444,8 @@ export default class LogAnalyzerApp extends LightningElement {
             } else {
                 localStorage.removeItem('apex_ai_gemini_key');
             }
-            if (this.geminiModel) {
-                localStorage.setItem('apex_ai_gemini_model', this.geminiModel);
-            }
+            const modelToSave = this.geminiModel === 'custom' && this.customModelName ? this.customModelName : this.geminiModel;
+            localStorage.setItem('apex_ai_gemini_model', modelToSave);
             this.showGeminiModal = false;
         } catch (e) {
             console.warn('Could not save to localStorage:', e);
@@ -427,13 +460,19 @@ export default class LogAnalyzerApp extends LightningElement {
             return;
         }
 
+        const modelToTest = this.effectiveModelName;
         this.isTestingConnection = true;
         this.geminiTestStatus = '';
 
-        testGeminiConnection({ apiKey: this.geminiApiKey.trim(), modelName: this.geminiModel })
+        testGeminiConnection({ apiKey: this.geminiApiKey.trim(), modelName: modelToTest })
             .then(res => {
-                this.geminiTestStatus = res;
-                this.isGeminiTestSuccess = true;
+                if (res === 'SUCCESS') {
+                    this.geminiTestStatus = `✓ Connection Successful! Model "${modelToTest}" is verified and ready for live AI fixes.`;
+                    this.isGeminiTestSuccess = true;
+                } else {
+                    this.geminiTestStatus = res;
+                    this.isGeminiTestSuccess = false;
+                }
                 this.isTestingConnection = false;
             })
             .catch(err => {
