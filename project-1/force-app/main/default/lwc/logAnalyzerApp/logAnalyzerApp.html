@@ -1,0 +1,838 @@
+<template>
+    <div class="app-container">
+        <!-- Minimal Material Header -->
+        <header class="app-header">
+            <div class="header-branding">
+                <div class="logo-box">⚡</div>
+                <div>
+                    <h1 class="header-title">Apex Log Analyzer</h1>
+                    <p class="header-subtitle">Agentic Debugging, Transaction Correlation &amp; Autonomous AI Fixes</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <span class="status-indicator-pill">
+                    <span class="status-dot"></span> Ready
+                </span>
+                <button class="btn btn-secondary btn-sm" onclick={handleOpenGeminiModal}>
+                    ⚙️ Gemini AI Settings
+                </button>
+            </div>
+        </header>
+
+        <!-- Notification Banner if Error -->
+        <template if:true={uiError}>
+            <div class="ui-error-banner">
+                <span class="ui-error-icon">⚠️</span>
+                <span class="ui-error-text">{uiError}</span>
+                <button class="btn-close-error" onclick={dismissUiError}>✕</button>
+            </div>
+        </template>
+
+        <!-- Top Navigation Breadcrumb Bar (Active during Analysis or Drill-down) -->
+        <template if:true={hasActiveAnalysis}>
+            <div class="top-nav-bar">
+                <button class="btn btn-secondary btn-sm" onclick={handleResetToLanding}>
+                    ← Home / Select Mode
+                </button>
+                <template if:true={isDrilledDownToSingleLog}>
+                    <button class="btn btn-ghost btn-sm ml-2" onclick={handleBackToTransactionGroups}>
+                        ← Back to Session Overview ({selectedWindowMinutes} Mins)
+                    </button>
+                </template>
+            </div>
+        </template>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 1: INITIAL LANDING SCREEN - ONLY 2 CARDS                   -->
+        <!-- ============================================================== -->
+        <template if:true={isFlowSelectionView}>
+            <div class="landing-container">
+                <div class="landing-hero-card">
+                    <div class="landing-hero-header">
+                        <span class="hero-badge">Salesforce Apex Diagnostic Studio</span>
+                        <h2 class="hero-title">Select Diagnostic Mode</h2>
+                        <p class="hero-desc">Choose a workflow below to begin investigating Salesforce execution logs.</p>
+                    </div>
+
+                    <div class="two-card-selection-grid">
+                        <!-- Card 1: Log Analysis by Time Window -->
+                        <div class="mode-select-card" onclick={handleOpenTimeAnalysisFlow}>
+                            <div class="mode-card-header">
+                                <div class="mode-icon-circle mode-icon-primary">⏱️</div>
+                                <span class="mode-tag">Session Correlation</span>
+                            </div>
+                            <h3 class="mode-card-title">Log Analysis by Time Window</h3>
+                            <p class="mode-card-desc">
+                                Fetch and aggregate Apex debug logs for any user across a configurable time window (5m, 15m, 30m, 1h). Automatically correlate parent &amp; asynchronous child transactions, trace call stacks, and isolate unhandled crashes from handled exceptions.
+                            </p>
+                            <div class="mode-card-features">
+                                <span class="feature-bullet">• Correlate Async Queueable &amp; Batch jobs</span>
+                                <span class="feature-bullet">• Identify Unhandled Stop Points vs Handled Errors</span>
+                                <span class="feature-bullet">• 3 Dedicated Tabs: Transactions, Chronological, Others</span>
+                            </div>
+                            <div class="mode-card-action">
+                                <button class="btn btn-primary full-btn" onclick={handleOpenTimeAnalysisFlow}>
+                                    Configure &amp; Run Analysis &rarr;
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Raw Log Parser -->
+                        <div class="mode-select-card" onclick={handleOpenRawParserFlow}>
+                            <div class="mode-card-header">
+                                <div class="mode-icon-circle mode-icon-secondary">⚡</div>
+                                <span class="mode-tag">Direct Parser</span>
+                            </div>
+                            <h3 class="mode-card-title">Raw Log Parser</h3>
+                            <p class="mode-card-desc">
+                                Paste raw debug log text directly from Salesforce Developer Console, VS Code terminal, or unit test executions for instant client-side call hierarchy parsing and AI-powered fix generation.
+                            </p>
+                            <div class="mode-card-features">
+                                <span class="feature-bullet">• No Trace Flag Setup Required</span>
+                                <span class="feature-bullet">• Deep Re-Entrant Call Tree &amp; Burn Rate</span>
+                                <span class="feature-bullet">• Generate Gemini AI Code Diff Fix</span>
+                            </div>
+                            <div class="mode-card-action">
+                                <button class="btn btn-secondary full-btn" onclick={handleOpenRawParserFlow}>
+                                    Open Raw Log Parser &rarr;
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 2: SETUP PANEL - TIME WINDOW ANALYSIS                     -->
+        <!-- ============================================================== -->
+        <template if:true={isTimeAnalysisSetupView}>
+            <div class="setup-container">
+                <div class="card setup-card">
+                    <div class="setup-card-header">
+                        <button class="btn btn-ghost btn-sm" onclick={handleBackToFlowSelection}>
+                            &larr; Back to Mode Selection
+                        </button>
+                        <div class="setup-title-box mt-2">
+                            <span class="setup-icon">⏱️</span>
+                            <div>
+                                <h2 class="setup-heading">Log Analysis by Time Window</h2>
+                                <p class="setup-subheading">Choose a time duration and target user to inspect session transactions.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setup-card-body">
+                        <!-- Time Window Pill Selector -->
+                        <div class="form-section">
+                            <label class="form-label">1. Select Analysis Time Window</label>
+                            <div class="pill-group">
+                                <template for:each={windowOptions} for:item="opt">
+                                    <button
+                                        key={opt.minutes}
+                                        class={opt.pillClass}
+                                        data-minutes={opt.minutes}
+                                        onclick={handleSelectWindowMinutes}>
+                                        {opt.label}
+                                    </button>
+                                </template>
+                            </div>
+                            <span class="form-hint">Only logs generated within this duration will be queried. Older unrelated logs are ignored.</span>
+                        </div>
+
+                        <!-- User / Single Log Selector -->
+                        <div class="form-section mt-4">
+                            <label class="form-label">2. Target User (from Recent Logs)</label>
+                            <div class="combobox-wrapper">
+                                <lightning-combobox
+                                    name="logSelect"
+                                    value={selectedLogId}
+                                    placeholder="Choose user from recent Apex logs..."
+                                    options={recentLogs}
+                                    onchange={handleLogSelect}
+                                    variant="label-hidden">
+                                </lightning-combobox>
+                            </div>
+                            <span class="form-hint">Selecting a log automatically identifies that log's user for session correlation.</span>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="setup-actions-row mt-4">
+                            <button class="btn btn-primary btn-lg" onclick={handleAnalyzeUserRecentLogs} disabled={isAnalyzing}>
+                                <template if:true={isAnalyzingMulti}>
+                                    <span class="spinner-sm"></span> Fetching Logs...
+                                </template>
+                                <template if:false={isAnalyzingMulti}>
+                                    ⏱️ Correlate &amp; Analyze Logs ({selectedWindowMinutes} Mins)
+                                </template>
+                            </button>
+                            <button class="btn btn-secondary btn-lg" onclick={handleAnalyzeSelected} disabled={isAnalyzing}>
+                                <template if:true={isAnalyzingSingle}>
+                                    <span class="spinner-sm"></span> Analyzing...
+                                </template>
+                                <template if:false={isAnalyzingSingle}>
+                                    📄 Analyze Selected Single Log Only
+                                </template>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 3: SETUP PANEL - RAW LOG PARSER                            -->
+        <!-- ============================================================== -->
+        <template if:true={isRawParserSetupView}>
+            <div class="setup-container">
+                <div class="card setup-card">
+                    <div class="setup-card-header">
+                        <button class="btn btn-ghost btn-sm" onclick={handleBackToFlowSelection}>
+                            &larr; Back to Mode Selection
+                        </button>
+                        <div class="setup-title-box mt-2">
+                            <span class="setup-icon">⚡</span>
+                            <div>
+                                <h2 class="setup-heading">Raw Log Parser</h2>
+                                <p class="setup-subheading">Paste Salesforce debug log content directly from Developer Console, VS Code, or test runs.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="setup-card-body">
+                        <div class="form-section">
+                            <label class="form-label">Paste Raw Apex Debug Log</label>
+                            <div class="raw-input-wrapper">
+                                <textarea
+                                    class="log-textarea"
+                                    placeholder="Paste raw Salesforce debug log text here (e.g. 59.0 APEX_CODE,FINEST...)..."
+                                    value={rawLogInput}
+                                    onchange={handleRawLogChange}>
+                                </textarea>
+                            </div>
+                        </div>
+
+                        <div class="setup-actions-row mt-4">
+                            <button class="btn btn-primary btn-lg" onclick={handleAnalyzeRaw} disabled={isAnalyzing}>
+                                <template if:true={isAnalyzingRaw}>
+                                    <span class="spinner-sm"></span> Parsing Log...
+                                </template>
+                                <template if:false={isAnalyzingRaw}>
+                                    ⚡ Parse Raw Log Text
+                                </template>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 4: MULTI-TRANSACTION 3-TAB OVERVIEW (Time Analysis)       -->
+        <!-- ============================================================== -->
+        <template if:true={isShowingMultiLogOverview}>
+            <div class="card multi-summary-card">
+                <!-- Summary Metrics Bar -->
+                <div class="multi-header">
+                    <div class="multi-title">
+                        <span class="badge-multi-icon">⏱️</span>
+                        <div>
+                            <h2 class="multi-heading">Multi-Transaction Session Correlation</h2>
+                            <p class="multi-subheading">{multiLogResult.summaryMessage}</p>
+                        </div>
+                    </div>
+                    <div class="multi-stats">
+                        <div class="stat-pill">
+                            <span class="stat-num">{multiLogResult.totalLogsCount}</span>
+                            <span class="stat-label">Total Logs</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-num">{transactionGroupsCount}</span>
+                            <span class="stat-label">Transactions</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-num">{limits.soqlQueries}</span>
+                            <span class="stat-label">Total SOQL</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-num">{limits.dmlStatements}</span>
+                            <span class="stat-label">Total DML</span>
+                        </div>
+                        <div class="stat-pill">
+                            <span class="stat-num">{limits.cpuTimeMs}ms</span>
+                            <span class="stat-label">Total CPU</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3 Sections / Tabs Navigation Bar -->
+                <div class="tab-nav-bar">
+                    <button class={tabGroupedClass} data-tab="grouped" onclick={handleSelectOverviewTab}>
+                        🔗 Grouped Transactions ({transactionGroupsCount})
+                    </button>
+                    <button class={tabChronologicalClass} data-tab="chronological" onclick={handleSelectOverviewTab}>
+                        📋 Chronological List View ({totalLogsCount})
+                    </button>
+                    <button class={tabUnrelatedClass} data-tab="unrelated" onclick={handleSelectOverviewTab}>
+                        📦 Others / Unrelated Logs ({unrelatedLogsCount})
+                    </button>
+                </div>
+
+                <!-- TAB 1: GROUPED TRANSACTIONS -->
+                <template if:true={isTabGroupedActive}>
+                    <div class="tab-content-area">
+                        <template if:true={transactionGroupsCount}>
+                            <div class="tx-groups-list">
+                                <template for:each={transactionGroupsView} for:item="grp">
+                                    <div key={grp.groupId} class="tx-group-card">
+                                        <div class="tx-group-header">
+                                            <div class="tx-group-title-row">
+                                                <span class="tx-group-badge">{grp.badgeLabel}</span>
+                                                <h3 class="tx-group-title">{grp.groupTitle}</h3>
+                                                <template if:true={grp.formattedTimeSpan}>
+                                                    <span class="tx-timespan-badge">⏱️ {grp.formattedTimeSpan}</span>
+                                                </template>
+                                                <span class="tx-causal-tag">🔗 Strict Causal Chain</span>
+                                            </div>
+                                            <div class="tx-group-actions">
+                                                <button class="btn btn-sm btn-secondary" onclick={handleAnalyzeTransactionGroup} data-groupid={grp.groupId}>
+                                                    ⚡ View Transaction Flow
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="tx-logs-container">
+                                            <template for:each={grp.logs} for:item="item">
+                                                <div key={item.logId} class="tx-log-wrapper">
+                                                    <template if:true={item.isChildLog}>
+                                                        <div class="causal-connector">
+                                                            <div class="causal-line"></div>
+                                                            <span class="causal-tag">↳ Enqueued Async Job {item.parentJobId}</span>
+                                                        </div>
+                                                    </template>
+
+                                                    <div class={item.cardClass}>
+                                                        <div class="tx-log-content">
+                                                            <div class="tx-log-status-col">
+                                                                <span class={item.statusChipClass}>{item.statusLabel}</span>
+                                                            </div>
+                                                            <div class="tx-log-info-col">
+                                                                <div class="tx-log-main-line">
+                                                                    <strong class="tx-log-op">{item.operation}</strong>
+                                                                    <span class="tx-log-time">{item.formattedTime}</span>
+                                                                    <span class="tx-log-offset">(+{item.relativeOffsetMs}ms)</span>
+                                                                </div>
+                                                                <div class="tx-log-meta-line">
+                                                                    <span>⏱️ {item.durationMs}ms</span>
+                                                                    <span>🔍 {item.soqlCount} SOQL</span>
+                                                                    <span>💾 {item.dmlCount} DML</span>
+                                                                    <span>⚡ {item.cpuTimeMs}ms CPU</span>
+                                                                </div>
+                                                                <template if:true={item.hasError}>
+                                                                    <div class="tx-log-error-text">{item.errorMessage}</div>
+                                                                </template>
+                                                            </div>
+                                                        </div>
+                                                        <div class="tx-log-action-col">
+                                                            <button class="btn btn-sm btn-primary-pill" onclick={handleAnalyzeSpecificLog} data-id={item.logId}>
+                                                                🔍 Analyze Log
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <template if:false={transactionGroupsCount}>
+                            <div class="empty-tab-state">
+                                <span class="empty-tab-icon">ℹ️</span>
+                                <div>
+                                    <h4>No Multi-Log Causal Chains Detected</h4>
+                                    <p>All operations executed in the selected time window were standalone transactions. Check the <strong>Chronological List View</strong> or <strong>Others</strong> tab to inspect them individually.</p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <!-- TAB 2: CHRONOLOGICAL LIST VIEW -->
+                <template if:true={isTabChronologicalActive}>
+                    <div class="tab-content-area">
+                        <div class="chronological-list">
+                            <template for:each={chronologicalLogsView} for:item="item">
+                                <div key={item.logId} class={item.cardClass}>
+                                    <div class="tx-log-content">
+                                        <div class="tx-log-status-col">
+                                            <span class={item.statusChipClass}>{item.statusLabel}</span>
+                                        </div>
+                                        <div class="tx-log-info-col">
+                                            <div class="tx-log-main-line">
+                                                <strong class="tx-log-op">{item.operation}</strong>
+                                                <span class="tx-log-time">{item.formattedTime}</span>
+                                                <span class="tx-log-offset">(+{item.relativeOffsetMs}ms)</span>
+                                            </div>
+                                            <div class="tx-log-meta-line">
+                                                <span>⏱️ {item.durationMs}ms</span>
+                                                <span>🔍 {item.soqlCount} SOQL</span>
+                                                <span>💾 {item.dmlCount} DML</span>
+                                                <span>⚡ {item.cpuTimeMs}ms CPU</span>
+                                            </div>
+                                            <template if:true={item.hasError}>
+                                                <div class="tx-log-error-text">{item.errorMessage}</div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div class="tx-log-action-col">
+                                        <button class="btn btn-sm btn-primary-pill" onclick={handleAnalyzeSpecificLog} data-id={item.logId}>
+                                            🔍 Analyze Log
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- TAB 3: OTHERS (UNRELATED LOGS) -->
+                <template if:true={isTabUnrelatedActive}>
+                    <div class="tab-content-area">
+                        <template if:true={unrelatedLogsCount}>
+                            <div class="unrelated-list">
+                                <template for:each={unrelatedLogsView} for:item="item">
+                                    <div key={item.logId} class={item.cardClass}>
+                                        <div class="tx-log-content">
+                                            <div class="tx-log-status-col">
+                                                <span class={item.statusChipClass}>{item.statusLabel}</span>
+                                            </div>
+                                            <div class="tx-log-info-col">
+                                                <div class="tx-log-main-line">
+                                                    <strong class="tx-log-op">{item.operation}</strong>
+                                                    <span class="tx-log-time">{item.formattedTime}</span>
+                                                    <span class="tx-log-offset">(+{item.relativeOffsetMs}ms)</span>
+                                                </div>
+                                                <div class="tx-log-meta-line">
+                                                    <span>⏱️ {item.durationMs}ms</span>
+                                                    <span>🔍 {item.soqlCount} SOQL</span>
+                                                    <span>💾 {item.dmlCount} DML</span>
+                                                    <span>⚡ {item.cpuTimeMs}ms CPU</span>
+                                                </div>
+                                                <template if:true={item.hasError}>
+                                                    <div class="tx-log-error-text">{item.errorMessage}</div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                        <div class="tx-log-action-col">
+                                            <button class="btn btn-sm btn-primary-pill" onclick={handleAnalyzeSpecificLog} data-id={item.logId}>
+                                                🔍 Analyze Log
+                                            </button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <template if:false={unrelatedLogsCount}>
+                            <div class="empty-tab-state">
+                                <span class="empty-tab-icon">✓</span>
+                                <div>
+                                    <h4>No Isolated Unrelated Logs</h4>
+                                    <p>All logs in this time window belong to causally linked transaction chains.</p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- ============================================================== -->
+        <!-- VIEW 5: SINGLE LOG ANALYSIS VIEW                               -->
+        <!-- ============================================================== -->
+        <template if:true={isShowingSingleLogAnalysis}>
+            <!-- Trace Notice Banner -->
+            <template if:true={showTraceFlagBanner}>
+                <div class="trace-notice-banner">
+                    <div class="trace-notice-content">
+                        <span class="trace-notice-icon">ℹ️</span>
+                        <div class="trace-notice-text">
+                            <strong>Method-Level Tracing Notice:</strong> Log level is set to <code>{analysisResult.logLevelSummary}</code>. For deep method-by-method call flow, set <strong>APEX_CODE</strong> to <strong>FINE</strong> or <strong>FINEST</strong> in Setup &gt; Debug Logs.
+                        </div>
+                    </div>
+                    <button class="btn-close-notice" onclick={dismissTraceNotice}>✕</button>
+                </div>
+            </template>
+
+            <!-- ========================================================== -->
+            <!-- DIAGNOSTICS: TARGET ERROR (UNHANDLED CRASH)                -->
+            <!-- ========================================================== -->
+            <template if:true={hasTargetError}>
+                <div class="error-banner target-crash-banner">
+                    <div class="error-icon">🚨</div>
+                    <div class="error-content">
+                        <div class="error-title-row">
+                            <span class="error-tag tag-unhandled">{targetError.exceptionType} [UNHANDLED CRASH]</span>
+                            <span class="error-location">in <strong>{targetError.className}</strong>.{targetError.methodName} at line <strong>{targetError.lineNumber}</strong></span>
+                        </div>
+                        <div class="error-message-text">{targetError.errorMessage}</div>
+                        <div class="error-subtext">
+                            ⛔ <strong>Execution stopped here:</strong> Method entered without a matching METHOD_EXIT. This fatal exception halted the transaction.
+                        </div>
+                    </div>
+                    <div class="error-action-col">
+                        <button class="btn btn-fix-primary" onclick={handleGenerateAIFix} disabled={isGeneratingFix}>
+                            <template if:true={isGeneratingFix}>
+                                <span class="spinner-sm"></span> Generating Fix...
+                            </template>
+                            <template if:false={isGeneratingFix}>
+                                🤖 Generate AI Fix for Crash
+                            </template>
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            <!-- ========================================================== -->
+            <!-- DIAGNOSTICS: HANDLED EXCEPTIONS (FLOW CONTINUED)           -->
+            <!-- ========================================================== -->
+            <template if:true={hasHandledErrors}>
+                <div class="card handled-errors-card">
+                    <div class="handled-header">
+                        <div class="handled-title-row">
+                            <span class="handled-icon">⚠️</span>
+                            <div>
+                                <h3 class="handled-heading">Handled Exceptions ({handledErrorsCount}) - Flow Continued</h3>
+                                <p class="handled-subheading">These exceptions occurred inside methods that completed normally (e.g. caught in try-catch blocks).</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="handled-list">
+                        <template for:each={handledErrors} for:item="hErr">
+                            <div key={hErr.id} class="handled-item-row">
+                                <div class="handled-item-info">
+                                    <span class="error-tag tag-handled">{hErr.exceptionType} [HANDLED]</span>
+                                    <span class="handled-item-loc">in <strong>{hErr.className}</strong>.{hErr.methodName} [:line {hErr.lineNumber}]</span>
+                                    <p class="handled-item-msg">{hErr.errorMessage}</p>
+                                </div>
+                                <div class="handled-item-action">
+                                    <button
+                                        class="btn btn-sm btn-fix-handled"
+                                        data-id={hErr.id}
+                                        onclick={handleGenerateAIFixForSpecificError}
+                                        disabled={isGeneratingFix}>
+                                        <template if:true={hErr.isCurrentlyFixing}>
+                                            <span class="spinner-sm"></span> Fixing...
+                                        </template>
+                                        <template if:false={hErr.isCurrentlyFixing}>
+                                            🤖 Fix This Exception
+                                        </template>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Success Banner if no errors -->
+            <template if:false={hasError}>
+                <div class="success-banner">
+                    <div class="success-icon">✓</div>
+                    <div class="success-content">
+                        <div class="success-title">Apex Execution Completed Successfully</div>
+                        <div class="success-subtext">No unhandled exceptions detected. Analyzed {analysisResult.totalLinesParsed} debug log lines with 0 runtime errors.</div>
+                    </div>
+                    <div class="success-badge-right">
+                        <span class="status-chip success-chip">0 Exceptions</span>
+                    </div>
+                </div>
+            </template>
+
+            <!-- AI Fix Diff Card (Gemini AI Recommendation) -->
+            <template if:true={aiFix}>
+                <div class="card ai-fix-card">
+                    <div class="ai-fix-header">
+                        <div class="ai-fix-title">
+                            <span>🤖 {aiFix.modelUsed} Recommendation</span>
+                            <span class="confidence-pill">{aiFix.confidence} CONFIDENCE</span>
+                        </div>
+                        <button class={copyBtnClass} onclick={handleCopyFix}>
+                            {copyBtnLabel}
+                        </button>
+                    </div>
+
+                    <div class="ai-summary-box">
+                        <strong>Root Cause:</strong> {aiFix.rootCauseSummary}
+                        <p class="ai-explanation-text"><strong>Architectural Solution:</strong> {aiFix.explanation}</p>
+                    </div>
+
+                    <div class="diff-container">
+                        <div class="diff-pane diff-before">
+                            <div class="diff-header">
+                                <span>Original Code (Issue / Anti-Pattern)</span>
+                                <span class="diff-tag before-tag">Issue</span>
+                            </div>
+                            <pre class="code-block"><code>{aiFix.originalCode}</code></pre>
+                        </div>
+                        <div class="diff-pane diff-after">
+                            <div class="diff-header">
+                                <span>Refactored Code (Fixed &amp; Guarded)</span>
+                                <span class="diff-tag after-tag">Resolved</span>
+                            </div>
+                            <pre class="code-block diff-highlight"><code>{aiFix.fixedCode}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <!-- ========================================================== -->
+            <!-- CALL TREE CARD (Deep Hierarchy & Stop Point Highlighter)    -->
+            <!-- ========================================================== -->
+            <div class="card call-tree-card">
+                <div class="call-tree-header">
+                    <div class="tree-header-title">
+                        <span class="tree-title-icon">🌳</span>
+                        <div>
+                            <h3 class="tree-heading">Code Execution Flow (Call Tree)</h3>
+                            <p class="tree-subheading">Complete method call hierarchy with execution timing, stop point highlighting, and re-entrant detection</p>
+                        </div>
+                    </div>
+                    <div class="tree-header-actions">
+                        <div class="tree-search-wrapper">
+                            <input
+                                type="text"
+                                class="tree-search-input"
+                                placeholder="Filter class or method..."
+                                value={treeSearchQuery}
+                                oninput={handleTreeSearch}
+                            />
+                        </div>
+                        <button class="btn btn-sm btn-ghost" onclick={handleExpandAll}>Expand All</button>
+                        <button class="btn btn-sm btn-ghost" onclick={handleCollapseAll}>Collapse All</button>
+                        <template if:true={hasErrorInTree}>
+                            <button class="btn btn-sm btn-danger-pill" onclick={handleJumpToError}>🎯 Jump to Stop Point</button>
+                        </template>
+                    </div>
+                </div>
+
+                <template if:true={hasTreeNodes}>
+                    <div class="call-tree-body">
+                        <template for:each={visibleTreeNodes} for:item="node">
+                            <div key={node.id} class={node.rowClass} style={node.indentStyle} data-id={node.id}>
+                                <!-- Toggle Arrow -->
+                                <template if:true={node.hasChildren}>
+                                    <button class="btn-node-toggle" onclick={handleToggleNode} data-id={node.id}>
+                                        <template if:true={node.isExpanded}>▾</template>
+                                        <template if:false={node.isExpanded}>▸</template>
+                                    </button>
+                                </template>
+                                <template if:false={node.hasChildren}>
+                                    <span class="node-leaf-bullet">•</span>
+                                </template>
+
+                                <!-- Type badge -->
+                                <span class={node.typeBadgeClass}>{node.nodeType}</span>
+
+                                <!-- Signature / Name -->
+                                <span class="node-signature">
+                                    <strong class="node-class">{node.className}</strong>
+                                    <span class="node-method">.{node.methodName}</span>
+                                    <template if:true={node.lineNumber}>
+                                        <span class="node-line">[:{node.lineNumber}]</span>
+                                    </template>
+                                </span>
+
+                                <!-- STOP POINT BADGE: Method where execution stopped -->
+                                <template if:true={node.isStopPoint}>
+                                    <span class="badge-stoppoint" title="Method entered without matching exit - Execution halted here">
+                                        ⛔ Execution Stopped Here (Unhandled Crash)
+                                    </span>
+                                </template>
+
+                                <!-- HANDLED ERROR BADGE -->
+                                <template if:true={node.isHandled}>
+                                    <span class="badge-handled" title="Exception caught in try-catch - Flow continued">
+                                        ⚠️ Handled Exception
+                                    </span>
+                                </template>
+
+                                <!-- Re-entrant indicator -->
+                                <template if:true={node.isReentrant}>
+                                    <span class="badge-reentrant" title="Recursive / Re-entrant call">🔄 Re-entrant</span>
+                                </template>
+
+                                <!-- Duration Pill -->
+                                <template if:true={node.durationMs}>
+                                    <span class="pill-duration">{node.formattedDuration}</span>
+                                </template>
+
+                                <!-- SOQL Count -->
+                                <template if:true={node.soqlCount}>
+                                    <span class="pill-soql">🔍 {node.soqlCount} SOQL</span>
+                                </template>
+
+                                <!-- DML Count -->
+                                <template if:true={node.dmlCount}>
+                                    <span class="pill-dml">💾 {node.dmlCount} DML</span>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <template if:false={hasTreeNodes}>
+                    <div class="tree-empty-state">
+                        <span>No method execution frames found in this debug log. Set <strong>APEX_CODE</strong> to <strong>FINE</strong> or <strong>FINEST</strong> in Setup &gt; Debug Logs to enable deep method tracing.</span>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Symmetrical Metrics & Diagnostics Grid -->
+            <div class="grid-2-col">
+                <!-- Governor Limit Burn Rate -->
+                <div class="card">
+                    <h3 class="card-title">⚡ Governor Limit Burn Rate</h3>
+                    <div class="metric-row">
+                        <div class="metric-item">
+                            <div class="metric-info-row">
+                                <span class="metric-label">SOQL Queries</span>
+                                <span class="metric-val">{limits.soqlQueries} / {limits.maxSoql} ({soqlPercent}%)</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill soql-fill" style={soqlProgressStyle}></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-info-row">
+                                <span class="metric-label">DML Statements</span>
+                                <span class="metric-val">{limits.dmlStatements} / {limits.maxDml} ({dmlPercent}%)</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill dml-fill" style={dmlProgressStyle}></div>
+                            </div>
+                        </div>
+                        <div class="metric-item">
+                            <div class="metric-info-row">
+                                <span class="metric-label">CPU Time</span>
+                                <span class="metric-val">{limits.cpuTimeMs}ms / {limits.maxCpuTimeMs}ms ({cpuPercent}%)</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill cpu-fill" style={cpuProgressStyle}></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SOQL-in-Loop (N+1 Anti-Pattern) -->
+                <div class="card">
+                    <h3 class="card-title">⚠️ SOQL-in-Loop (N+1 Anti-Pattern)</h3>
+                    <template if:true={soqlWarnings.length}>
+                        <div class="warnings-scroll">
+                            <template for:each={soqlWarnings} for:item="warn">
+                                <div key={warn.query} class="warning-alert">
+                                    <div class="warn-title">Loop Query Detected in {warn.className} at line {warn.lineNumber}</div>
+                                    <div class="warn-desc">Executed {warn.executionCount} times inside an iteration block.</div>
+                                    <code class="warn-code">{warn.query}</code>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <template if:false={soqlWarnings.length}>
+                        <div class="empty-state-clean">
+                            <div class="empty-icon">🛡️</div>
+                            <div class="empty-text">No SOQL queries inside loops detected in this transaction!</div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Salesforce Order of Execution (OoE) Swimlane -->
+            <div class="card">
+                <h3 class="card-title">🔄 Salesforce Order of Execution (OoE) Timeline</h3>
+                <div class="stepper-container">
+                    <template for:each={stages} for:item="stg">
+                        <div key={stg.stageOrder} class="stepper-step">
+                            <div class={stg.circleClass}>{stg.icon}</div>
+                            <div class="step-name">{stg.stageName}</div>
+                            <div class="step-cat">{stg.category}</div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- ============================================================== -->
+        <!-- GEMINI AI SETTINGS MODAL                                       -->
+        <!-- ============================================================== -->
+        <template if:true={showGeminiModal}>
+            <div class="modal-backdrop">
+                <div class="modal-card">
+                    <div class="modal-header">
+                        <div class="modal-title">
+                            <span class="modal-icon">🤖</span>
+                            <div>
+                                <h3>Google Gemini AI Settings</h3>
+                                <p class="modal-subtitle">Configure Gemini for intelligent root-cause analysis and automated code fixing.</p>
+                            </div>
+                        </div>
+                        <button class="btn-modal-close" onclick={handleCloseGeminiModal}>✕</button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label class="form-label">Google Gemini API Key</label>
+                            <div class="input-password-row">
+                                <input
+                                    type={passwordInputType}
+                                    class="text-input"
+                                    placeholder="Paste Gemini API Key (AIzaSy...)"
+                                    value={geminiApiKey}
+                                    onchange={handleApiKeyChange}
+                                />
+                                <button class="btn-toggle-visibility" onclick={handleTogglePassword}>
+                                    {passwordToggleIcon}
+                                </button>
+                            </div>
+                            <span class="form-hint">Stored securely in your browser session for direct API calls.</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Gemini Model</label>
+                            <lightning-combobox
+                                name="modelSelect"
+                                value={geminiModel}
+                                options={geminiModelOptions}
+                                onchange={handleModelChange}
+                                variant="label-hidden">
+                            </lightning-combobox>
+                        </div>
+
+                        <template if:true={geminiTestStatus}>
+                            <div class={testStatusClass}>
+                                {geminiTestStatus}
+                            </div>
+                        </template>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick={handleTestGemini} disabled={isTestingConnection}>
+                            <template if:true={isTestingConnection}>
+                                <span class="spinner-sm"></span> Testing...
+                            </template>
+                            <template if:false={isTestingConnection}>
+                                🔍 Test Connection
+                            </template>
+                        </button>
+                        <button class="btn btn-primary" onclick={handleSaveGeminiKey}>
+                            Save &amp; Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</template>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package xmlns="http://soap.sforce.com/2006/04/metadata">
+    <types>
+        <members>CloudAIService</members>
+        <members>LogAnalyzerController</members>
+        <members>LogParserService</members>
+        <members>LogParserServiceTest</members>
+        <name>ApexClass</name>
+    </types>
+    <types>
+        <members>SessionIdHelper</members>
+        <name>ApexPage</name>
+    </types>
+    <types>
+        <members>Apex_Log_Analyzer</members>
+        <name>CustomApplication</name>
+    </types>
+    <types>
+        <members>Apex_Log_Analyzer</members>
+        <name>CustomTab</name>
+    </types>
+    <types>
+        <members>logAnalyzerApp</members>
+        <name>LightningComponentBundle</name>
+    </types>
+    <types>
+        <members>GoogleGeminiAPI</members>
+        <members>SalesforceOrgDomain</members>
+        <name>RemoteSiteSetting</name>
+    </types>
+    <version>59.0</version>
+</Package>

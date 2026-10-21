@@ -1,0 +1,54 @@
+# Salesforce cache & deploy artifacts
+.sf/
+.sfdx/
+.localdevserver/
+deploy-options.json
+.artifactCache/
+
+# AI and IDE cache
+.claude/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# LWC VSCode autocomplete & cache
+**/lwc/jsconfig.json
+.eslintcache
+
+# LWC Jest coverage reports
+coverage/
+
+# Logs & temporary files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+scratch/
+*.tmp
+
+# Dependency directories
+node_modules/
+
+# OS system files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Local environment variables & secrets
+.env
+.env.*
+*.secret
+*.pem
+*.key
+
+# Python Salesforce Functions
+**/__pycache__/
+**/.venv/
+**/venv/
